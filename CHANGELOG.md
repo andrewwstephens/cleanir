@@ -62,3 +62,5 @@
 2018-Oct-19, astephens, support user-supplied source ROIs to ignore  
 2018-Oct-20, astephens, add pshift parameter to change pattern shifts  
 2018-Oct-21, astephens, add row filtering  
+2019-Feb-10, astephens, update to python3
+

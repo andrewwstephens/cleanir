@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 
 import argparse
 from   astropy.io import fits
@@ -16,9 +16,12 @@ from   scipy import optimize
 from   scipy.stats import norm
 import sys
 
+version = '2019-Feb-10'
+
 # --------------------------------------------------------------------------------------------------
 
 # ToDo:
+# Support --output so that ndisplay works with the 'clean' option!
 # Update help
 # Switch to python3
 # Simpler to pass the four quadrants as a list, e.g. [q0,q1,q2,q3] ?
@@ -139,8 +142,8 @@ class CleanIR():
 
         logger.info('Config: %s', self.config)
 
-        self.qxsize =  self.naxis1 / 2  # quadrant x size
-        self.qysize =  self.naxis2 / 2  # quadrant y size
+        self.qxsize = int(self.naxis1 / 2)  # quadrant x size
+        self.qysize = int(self.naxis2 / 2)  # quadrant y size
 
         self.mdata = ma.array(self.data, copy=True) # masked science data
 
@@ -294,7 +297,7 @@ class CleanIR():
             logger.info('Sigma-clipping to remove sources...')
             q0,q1,q2,q3 = disassemble(self.data - self.sub)
             pool = multiprocessing.Pool(processes=4)
-            mapfunc = partial(stats.sigma_clip,sigma_lower=3,sigma_upper=self.clip_sigma,iters=None)
+            mapfunc = partial(stats.sigma_clip,sigma_lower=3,sigma_upper=self.clip_sigma,maxiters=None)
             p0,p1,p2,p3 = pool.map(mapfunc, [q0,q1,q2,q3])
             nosrc = assemble(p0,p1,p2,p3) # the image with all sources masked
             sigmask = ma.ones((self.naxis2, self.naxis1))
@@ -314,8 +317,8 @@ class CleanIR():
         logger = logging.getLogger('calculate_pattern')
         logger.info('Calculating patterns...')
 
-        # Create arrays of indices which correspond to the pattern tiled over the image        
-        indx = numpy.tile(numpy.arange(0, self.qxsize, self.pxsize), self.qysize/self.pysize)
+        # Create arrays of indices which correspond to the pattern tiled over the image
+        indx = numpy.tile(numpy.arange(0, self.qxsize, self.pxsize), int(self.qysize/self.pysize))
         indy = numpy.arange(0, self.qysize, self.pysize).repeat(self.qxsize/self.pxsize)
         logger.debug('...indx: %s', indx)
         logger.debug('...indy: %s', indy)
@@ -402,7 +405,7 @@ class CleanIR():
                 # good = self.data * goodmask * self.dqmask * self.srcmask - self.sub
                 # good = self.data * notroi - self.sub
                 good = stats.sigma_clip(self.data * notroi - self.sub, 
-                                        sigma_lower=3, sigma_upper=3.0, iters=1)
+                                        sigma_lower=3, sigma_upper=3.0, maxiters=1)
                 middle = fitpixdist(ma.compressed(good), graph=self.graph)
                 logger.debug('Good level: %.2f', middle)
 
@@ -522,13 +525,13 @@ def disassemble(image):
     +---+---+
     """
 
-    xsize = image.shape[1]
-    ysize = image.shape[0]
+    xsize = int(image.shape[1])
+    ysize = int(image.shape[0])
 
-    q0 = image[ysize/2:ysize,         0:xsize/2]
-    q1 = image[ysize/2:ysize,   xsize/2:xsize]
-    q2 = image[      0:ysize/2,       0:xsize/2]
-    q3 = image[      0:ysize/2, xsize/2:xsize]
+    q0 = image[int(ysize/2):ysize,                   0:int(xsize/2)]
+    q1 = image[int(ysize/2):ysize,        int(xsize/2):xsize]
+    q2 = image[           0:int(ysize/2),            0:int(xsize/2)]
+    q3 = image[           0:int(ysize/2), int(xsize/2):xsize]
 
     return q0, q1, q2, q3
 
@@ -549,10 +552,10 @@ def assemble(q0, q1, q2, q3):
     else:
         image = numpy.zeros(ysize*xsize).reshape(ysize,xsize)
 
-    image[ysize/2:ysize,         0:xsize/2] = q0
-    image[ysize/2:ysize,   xsize/2:xsize]   = q1
-    image[      0:ysize/2,       0:xsize/2] = q2
-    image[      0:ysize/2, xsize/2:xsize]   = q3
+    image[int(ysize/2):ysize,                   0:int(xsize/2)] = q0
+    image[int(ysize/2):ysize,        int(xsize/2):xsize]        = q1
+    image[           0:int(ysize/2),            0:int(xsize/2)] = q2
+    image[           0:int(ysize/2), int(xsize/2):xsize]        = q3
 
     return image
 
@@ -568,10 +571,10 @@ def offset(image, o0, o1, o2, o3):
     xsize = image.shape[1]
     ysize = image.shape[0]
 
-    image[ysize/2:ysize,         0:xsize/2] += o0
-    image[ysize/2:ysize,   xsize/2:xsize]   += o1
-    image[      0:ysize/2,       0:xsize/2] += o2
-    image[      0:ysize/2, xsize/2:xsize]   += o3
+    image[int(ysize/2):ysize,                   0:int(xsize/2)] += o0
+    image[int(ysize/2):ysize,        int(xsize/2):xsize]        += o1
+    image[           0:int(ysize/2),            0:int(xsize/2)] += o2
+    image[           0:int(ysize/2), int(xsize/2):xsize]        += o3
 
     return image
 
@@ -588,8 +591,8 @@ def checksub(data_and_pattern):
     data    = data_and_pattern[0]
     pattern = data_and_pattern[1]
 
-    ostd = numpy.std(stats.sigma_clip(data,         sigma_lower=3.0, sigma_upper=3.0, iters=None))
-    cstd = numpy.std(stats.sigma_clip(data-pattern, sigma_lower=3.0, sigma_upper=3.0, iters=None))
+    ostd = numpy.std(stats.sigma_clip(data,         sigma_lower=3.0, sigma_upper=3.0, maxiters=None))
+    cstd = numpy.std(stats.sigma_clip(data-pattern, sigma_lower=3.0, sigma_upper=3.0, maxiters=None))
 
     if ostd - cstd > 0.01:
         logger.info('stddev %6.2f -> %6.2f  Improvement!', ostd, cstd)
@@ -665,7 +668,7 @@ def cpq(quad, pxsize=None, pysize=None, qxsize=None, qysize=None, indx=None, ind
     else:
         raise SystemExit('Invalid pshift')
 
-    quadpattern = numpy.tile(p, (qysize/pysize, qxsize/pxsize)) # Tile the pattern over quadrant
+    quadpattern = numpy.tile(p, (int(qysize/pysize), int(qxsize/pxsize))) # Tile pattern over quadrant
 
     return p, quadpattern
 
@@ -818,7 +821,7 @@ def ConfigureLogging(level='INFO'):
     elif level.upper() == 'CRITICAL':
         consoleloghandler.setLevel(logging.CRITICAL)
     else:
-        print 'ERROR: Unknown log error level'
+        print ('ERROR: Unknown log error level')
         consoleloghandler.setLevel(logging.INFO)
     consoleloghandler.setFormatter(formatter)
     logger.addHandler(consoleloghandler)
