@@ -63,4 +63,5 @@
 2018-Oct-20, astephens, add pshift parameter to change pattern shifts  
 2018-Oct-21, astephens, add row filtering  
 2019-Feb-10, astephens, update to python3
+2019-Feb-19, astephens, fix missing int in row filter
 
