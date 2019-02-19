@@ -16,7 +16,7 @@ from   scipy import optimize
 from   scipy.stats import norm
 import sys
 
-version = '2019-Feb-10'
+version = '2019-Feb-19'
 
 # --------------------------------------------------------------------------------------------------
 
@@ -684,7 +684,7 @@ def rf(quad): # Row filter a quadrant
         p = ma.zeros(8)
         for ix in range(0, 8):
             p[ix] = ma.median(quad[iy,indx+ix])
-        pattern[iy] = numpy.tile(p, xsize/8)
+        pattern[iy] = numpy.tile(p, int(xsize/8))
     logger.debug('Row pattern mean: %s', ma.mean(pattern))
     pattern -= ma.mean(pattern) # set the mean to zero
     return pattern.filled(fill_value=0) # set masked values to zero
