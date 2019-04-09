@@ -16,14 +16,12 @@ from   scipy import optimize
 from   scipy.stats import norm
 import sys
 
-version = '2019-Feb-19'
+version = '2019-Apr-08'
 
 # --------------------------------------------------------------------------------------------------
 
 # ToDo:
-# Support --output so that ndisplay works with the 'clean' option!
 # Update help
-# Switch to python3
 # Simpler to pass the four quadrants as a list, e.g. [q0,q1,q2,q3] ?
 # Do we really need to save the variables qxsize and qysize ?
 # Add regression tests
@@ -299,6 +297,8 @@ class CleanIR():
             pool = multiprocessing.Pool(processes=4)
             mapfunc = partial(stats.sigma_clip,sigma_lower=3,sigma_upper=self.clip_sigma,maxiters=None)
             p0,p1,p2,p3 = pool.map(mapfunc, [q0,q1,q2,q3])
+            pool.close()
+            pool.join()
             nosrc = assemble(p0,p1,p2,p3) # the image with all sources masked
             sigmask = ma.ones((self.naxis2, self.naxis1))
             sigmask.mask = nosrc.mask
@@ -332,9 +332,9 @@ class CleanIR():
                           qysize=self.qysize, indx=indx, indy=indy, graph=graph, pshift=self.pshift)
         q0,q1,q2,q3 = disassemble(self.mdata)
         pool = multiprocessing.Pool(processes=4)
-        #p0,p1,p2,p3 = pool.map(mapfunc, [q0,q1,q2,q3])
         (k0,p0),(k1,p1),(k2,p2),(k3,p3) = pool.map(mapfunc, [q0,q1,q2,q3])
-
+        pool.close()
+        pool.join()
         self.kernel  = assemble(k0,k1,k2,k3)
         self.pattern = assemble(p0,p1,p2,p3)
 
@@ -360,6 +360,8 @@ class CleanIR():
             data = [(d0,p0), (d1,p1), (d2,p2), (d3,p3)] # pool.map only supports one input list
             pool = multiprocessing.Pool(processes=4)
             q0,q1,q2,q3 = pool.map(checksub, data)
+            pool.close()
+            pool.join()
             self.pattern = assemble(q0,q1,q2,q3)
 
         self.cleaned = self.data - self.pattern
@@ -392,7 +394,9 @@ class CleanIR():
             data = [ma.compressed(q0), ma.compressed(q1), ma.compressed(q2), ma.compressed(q3)]
             pool = multiprocessing.Pool(processes=4)
             mapfunc = partial(fitpixdist, graph=graph)
-            g0,g1,g2,g3 = pool.map(mapfunc, data)            
+            g0,g1,g2,g3 = pool.map(mapfunc, data)
+            pool.close()
+            pool.join()
             logger.debug('Peaks: %5.1f %5.1f %5.1f %5.1f', g0, g1, g2, g3)
 
             if self.roi:
@@ -464,6 +468,8 @@ class CleanIR():
         q0,q1,q2,q3 = disassemble(self.mdata - self.sub - self.pattern)
         pool = multiprocessing.Pool(processes=4)
         p0,p1,p2,p3 = pool.map(rf, [q0,q1,q2,q3])
+        pool.close()
+        pool.join()
         self.rowpattern = assemble(p0,p1,p2,p3)
 
         self.cleaned -= self.rowpattern
@@ -922,7 +928,7 @@ if __name__ == '__main__':
 
     parser.add_argument('--rowfilter', action='store_true', default=False,
                         help='Filter each quadrant row with an 8-pixel kernel.  This may be useful\
-                        for GNIRS XD spetra that cannot be cleaned otherwise.')
+                        for GNIRS XD spectra that cannot be cleaned otherwise.')
 
     parser.add_argument('--save', action='append', type=str, default=None,
                         choices=['kernel', 'masked', 'pattern', 'rowpattern'],
