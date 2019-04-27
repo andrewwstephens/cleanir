@@ -1,6 +1,6 @@
 # changelog
 
-2007-Jul-08, astephens, alpha version, based on IDL code by Mischa Shirmer
+2007-Jul-08, astephens, alpha version, based on IDL code by Mischa Schirmer  
 2007-Jul-10, astephens, move most operations to cleanquad function  
 2007-Jul-11, astephens, use stddev to decide whether to keep orig quad  
 2007-Jul-14, astephens, generalized code to allow different pattern sizes  
