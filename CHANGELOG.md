@@ -1,6 +1,6 @@
 # changelog
 
-2007-Jul-08, astephens, alpha version  
+2007-Jul-08, astephens, alpha version, based on IDL code by Mischa Shirmer
 2007-Jul-10, astephens, move most operations to cleanquad function  
 2007-Jul-11, astephens, use stddev to decide whether to keep orig quad  
 2007-Jul-14, astephens, generalized code to allow different pattern sizes  
@@ -51,7 +51,9 @@
 2017-Mar-11, astephens, fix calculation of stddev after quadrant adjustment  
 
 ---
+
 **Current code-base starts here.**  
+
 2017-Mar-12, astephens, complete code reorganization  
 2018-Sep-09, astephens, use numpy array masking to support fixing ROIs  
 2018-Sep-11, astephens, include quadrant leveling  
@@ -62,6 +64,6 @@
 2018-Oct-19, astephens, support user-supplied source ROIs to ignore  
 2018-Oct-20, astephens, add pshift parameter to change pattern shifts  
 2018-Oct-21, astephens, add row filtering  
-2019-Feb-10, astephens, update to python3
-2019-Feb-19, astephens, fix missing int in row filter
-2019-Apr-08, astephens, close and join pools when finished
+2019-Feb-10, astephens, update to python3  
+2019-Feb-19, astephens, fix missing int in row filter  
+2019-Apr-08, astephens, close and join pools when finished  
