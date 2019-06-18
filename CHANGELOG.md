@@ -64,6 +64,7 @@
 2018-Oct-19, astephens, support user-supplied source ROIs to ignore  
 2018-Oct-20, astephens, add pshift parameter to change pattern shifts  
 2018-Oct-21, astephens, add row filtering  
-2019-Feb-10, astephens, update to python3  
-2019-Feb-19, astephens, fix missing int in row filter  
-2019-Apr-08, astephens, close and join pools when finished  
+2019-Feb-10, astephens, update to python3
+2019-Feb-19, astephens, fix missing int in row filter
+2019-Apr-08, astephens, close and join pools when finished
+2019-Jun-18, astephens, fix bug specifying output filename when input data are in a subdirectory
