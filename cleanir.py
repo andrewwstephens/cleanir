@@ -16,7 +16,7 @@ from   scipy import optimize
 from   scipy.stats import norm
 import sys
 
-version = '2019-Apr-08'
+version = '2019-Jun-18'
 
 # --------------------------------------------------------------------------------------------------
 
@@ -31,6 +31,7 @@ version = '2019-Apr-08'
 # determination that may give better results, especially for GNIRS spectroscopy where only the
 # unilluminated edges are available.
 # -> either median combine the quadrants or the pattern, or filter the whole detector at once.
+# support FITS files that have been compressed with bzip2
 
 # --------------------------------------------------------------------------------------------------
 
@@ -482,13 +483,12 @@ class CleanIR():
         logger = logging.getLogger('write_output')
 
         path, filename = os.path.split(self.fitsfile)
-        if len(path) > 0: path += '/'
-        fileroot = path + 'c' + self.fitsfile[:self.fitsfile.rfind('.fits')]
-        logger.debug('fileroot: %s', fileroot)
+        cleanfile = 'c' + filename[:filename.rfind('.fits')]
+        logger.debug('cleanfile: %s', cleanfile)
 
         if self.save is not None:
             for s in self.save:
-                f = fileroot + '_' + s + '.fits'
+                f = cleanfile + '_' + s + '.fits'
                 logger.info('Writing %s', f)
                 delete ([f])
                 if s == 'kernel':
@@ -501,14 +501,13 @@ class CleanIR():
                     data = self.rowpattern
                 fits.PrimaryHDU(data).writeto(f)
 
-        cleanfile = path + 'c' + self.fitsfile
-        logger.info('Writing %s', cleanfile)
-        delete ([cleanfile])
-
         if self.instrument == 'GNIRS':
             logger.debug('Removing padding')
             self.cleaned = numpy.delete(self.cleaned, [self.naxis2-1,self.naxis2-2], axis=0)
 
+        cleanfile += '.fits'
+        logger.info('Writing %s', cleanfile)
+        delete ([cleanfile])
         self.hdulist[self.sciext].data = self.cleaned
         self.hdulist[0].header['CLEANIR'] = datetime.datetime.utcnow().strftime('%Y-%m-%dT%H:%M:%S')
         self.hdulist[0].header.comments['CLEANIR'] = 'UT time stamp for cleanir.py'
