@@ -222,7 +222,7 @@ class CleanIR():
             self.dqmask = 1.0
 
         if self.usermask is not None:  # user-supplied pixel mask
-            logger.info('Masking pixels from the supplied mask %s', self.usermask)
+            logger.info('Masking pixels from %s', self.usermask)
             with fits.open(self.usermask) as hdulist:
                 numext = len(hdulist)
                 logger.debug('...numext: %d', numext)
