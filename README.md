@@ -11,7 +11,7 @@ CleanIR is an application to clean detector controller artifacts from [Gemini](h
 
 ## Dependencies
 CleanIR requires the following python packages:
-- astropy - https://www.astropy.org/  
+- astropy >= 3.1 - https://www.astropy.org/  
 - matplotlib - http://matplotlib.org/  
 - numpy - https://www.numpy.org/  
 - scipy - https://www.scipy.org/  
