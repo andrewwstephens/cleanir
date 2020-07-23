@@ -16,7 +16,7 @@ from   scipy import optimize
 from   scipy.stats import norm
 import sys
 
-version = '2019-Jun-18'
+__version__ = '2020-Jul-22'
 
 # --------------------------------------------------------------------------------------------------
 
@@ -32,6 +32,10 @@ version = '2019-Jun-18'
 # unilluminated edges are available.
 # -> either median combine the quadrants or the pattern, or filter the whole detector at once.
 # support FITS files that have been compressed with bzip2
+
+# The help needs to be clearer about how to specify an ROI.
+# The y-range should be specified on a SINGLE quadrant
+# May it be specified on the top or bottom half of the detector?
 
 # --------------------------------------------------------------------------------------------------
 
@@ -80,6 +84,7 @@ class CleanIR():
         self.src = args.src
         self.sub = args.sub
         self.use_dq = not args.nodq
+        self.usermask = args.mask  # user-supplied pixel mask
 
     # ----------------------------------------------------------------------------------------------
 
@@ -215,7 +220,18 @@ class CleanIR():
 
         else:
             self.dqmask = 1.0
-            
+
+        if self.usermask is not None:  # user-supplied pixel mask
+            logger.info('Masking pixels from the supplied mask %s', self.usermask)
+            with fits.open(self.usermask) as hdulist:
+                numext = len(hdulist)
+                logger.debug('...numext: %d', numext)
+                if numext != 1:
+                    raise SystemExit('User supplied mask has multiple extensions.  Not sure which is the mask.')
+                data_ext = 0
+                usermask = ma.masked_where(hdulist[data_ext].data > 0, numpy.ones((self.naxis2, self.naxis1)))
+            self.mdata *= usermask
+
         return
 
     # ----------------------------------------------------------------------------------------------
@@ -466,13 +482,12 @@ class CleanIR():
         # pattern noise on the full quadrant before trying to row filter, as the row filtering
         # will be affected by sky lines.  Alternatively we do quad filtering OR row filtering.
         
-        q0,q1,q2,q3 = disassemble(self.mdata - self.sub - self.pattern)
+        q0,q1,q2,q3 = disassemble(self.mdata - self.pattern)
         pool = multiprocessing.Pool(processes=4)
         p0,p1,p2,p3 = pool.map(rf, [q0,q1,q2,q3])
         pool.close()
         pool.join()
         self.rowpattern = assemble(p0,p1,p2,p3)
-
         self.cleaned -= self.rowpattern
 
         return
@@ -681,6 +696,7 @@ def cpq(quad, pxsize=None, pysize=None, qxsize=None, qysize=None, indx=None, ind
 
 def rf(quad): # Row filter a quadrant
     logger = logging.getLogger('rf')
+    #display(quad, title='Input')
     xsize = quad.shape[1]
     ysize = quad.shape[0]
     indx = numpy.arange(0, xsize, 8)
@@ -690,10 +706,23 @@ def rf(quad): # Row filter a quadrant
         for ix in range(0, 8):
             p[ix] = ma.median(quad[iy,indx+ix])
         pattern[iy] = numpy.tile(p, int(xsize/8))
-    logger.debug('Row pattern mean: %s', ma.mean(pattern))
-    pattern -= ma.mean(pattern) # set the mean to zero
-    return pattern.filled(fill_value=0) # set masked values to zero
+    #display(pattern, title='Pattern Pre-Normalization')
+    mean = ma.mean(pattern)
+    logger.debug('Row pattern mean: %s', mean)
+    pattern -= mean                      # set the pattern mean to zero
+    return pattern.filled(fill_value=0)  # set masked values to zero
 
+# --------------------------------------------------------------------------------------------------
+
+def display(image, title=None, cmap='viridis'): # cmap='gray'
+    logger = logging.getLogger('display')
+    fig = pyplot.figure(figsize=(8,8))
+    pyplot.imshow(image, cmap=cmap, origin='lower')
+    if title is not None:
+        pyplot.title(title)
+    pyplot.show()
+    return
+    
 # --------------------------------------------------------------------------------------------------
 
 def expand(listoflists):
@@ -871,7 +900,7 @@ if __name__ == '__main__':
         \n\
         Note that you may use glob expansion in infile, however, the entire string must then be\
         quoted or any pattern matching characters (*,?) must be escaped with a backslash.',
-        epilog='Version: ' + version)
+        epilog='Version: ' + __version__)
 
     # Add comment about the pshift parameter.
     # Use "min" if the stripes are positive, and "max" if the stripes are negative,
@@ -897,6 +926,9 @@ if __name__ == '__main__':
                         choices=['pattern', 'offsets'],
                         help='Graph output')
 
+    parser.add_argument('--mask', action='store', default=None,
+                        help='Use a custom pixel mask (0=good)')
+    
     parser.add_argument('--nodq', action='store_true', default=False,
                         help='Ignore the DQ plane [False]')
 
@@ -940,6 +972,7 @@ if __name__ == '__main__':
                         help='ROI(s) to ignore when calculating the pattern.  Note that default\
                         ROIs will be used for some spectroscopic configurations.  Set to "None"\
                         to NOT use the default ROIs.')
+    
     # --src defaults to None, which this script interprets as "use the default mask".
     # If the user wants to NOT use the default mask they should pass in the string "None"
     # which will come through as args.src = ['None'].
