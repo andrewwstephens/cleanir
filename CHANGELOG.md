@@ -70,3 +70,5 @@
 2019-Jun-18, astephens, fix bug specifying output filename when input data are in a subdirectory  
 2020-Jul-22, astephens, fix bug when using --rowfiter and --sub together  
 2020-Jul-22, astephens, add option to supply a custom pixel mask  
+2021-May-24, astephens, improve extension detection; give error if image has incorrect dimensions  
+
