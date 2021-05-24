@@ -14,9 +14,8 @@ from   numpy import ma
 import os
 from   scipy import optimize
 from   scipy.stats import norm
-import sys
 
-__version__ = '2020-Jul-22'
+__version__ = '2021-May-24'
 
 # --------------------------------------------------------------------------------------------------
 
@@ -32,10 +31,7 @@ __version__ = '2020-Jul-22'
 # unilluminated edges are available.
 # -> either median combine the quadrants or the pattern, or filter the whole detector at once.
 # support FITS files that have been compressed with bzip2
-
-# The help needs to be clearer about how to specify an ROI.
-# The y-range should be specified on a SINGLE quadrant
-# May it be specified on the top or bottom half of the detector?
+# Run regression tests - especially the old frame with row noise.
 
 # --------------------------------------------------------------------------------------------------
 
@@ -63,7 +59,6 @@ def main(args):
 class CleanIR():
 
     def __init__(self, args):
-        logger = logging.getLogger('init')
         self.clip = args.clip
         self.debug = args.debug
         self.force = args.force
@@ -77,7 +72,7 @@ class CleanIR():
         self.pysize =  4
         self.quadlevel = args.quadlevel
         self.roi = args.roi
-        self.roimirror = True # mirror ROIs in the bottom quads to the top quads (and vice-versa?)
+        self.roimirror = True  # mirror ROIs in the bottom quads to the top quads (and vice-versa?)
         self.rowfilter = args.rowfilter
         self.clip_sigma = args.sigma
         self.save = args.save
@@ -89,7 +84,6 @@ class CleanIR():
     # ----------------------------------------------------------------------------------------------
 
     def clean(self, fitsfile):
-        logger = logging.getLogger('clean')
         self.fitsfile = fitsfile
         self.read()
         self.mask_rois()
@@ -114,10 +108,20 @@ class CleanIR():
         numext = len(self.hdulist)
         logger.debug('Numext: %d', numext)
 
-        if numext == 1:
-            self.sciext = 0
-        else:
-            self.sciext = 1
+        self.sciext = None
+        for i in range(len(self.hdulist)):
+            try:
+                extname = self.hdulist[i].header['EXTNAME']
+            except:
+                extname = None
+            logger.debug('Extension %d name: %s', i, extname)
+            if extname == 'SCI':
+                self.sciext = i
+        if self.sciext is None:
+            if numext == 1:
+                self.sciext = 0
+            else:
+                self.sciext = 1
         logger.debug('Science extension: %s', self.sciext)
 
         self.data = self.hdulist[self.sciext].data
@@ -125,8 +129,8 @@ class CleanIR():
         self.instrument = self.hdulist[0].header['INSTRUME']
         logger.debug('Instrument: %s', self.instrument)
 
-        self.naxis1 = self.hdulist[self.sciext].header['naxis1']
-        self.naxis2 = self.hdulist[self.sciext].header['naxis2']
+        self.naxis1 = self.hdulist[self.sciext].header['naxis1']  # X
+        self.naxis2 = self.hdulist[self.sciext].header['naxis2']  # Y
         logger.debug('Image size: %s x %s', self.naxis1, self.naxis2)
 
         if self.instrument == 'NIRI':
@@ -144,12 +148,18 @@ class CleanIR():
             logger.error('Unsupported instrument: %s', self.instrument)
             raise SystemExit
 
+        # Check that the image is the proper size:
+        if self.naxis1 % self.pxsize or self.naxis2 % self.pysize:
+            logger.info('Padded image size: %d x %d', self.naxis1, self.naxis2)
+            logger.error('Image size is not a multiple of %d x %d', self.pxsize, self.pysize)
+            raise SystemExit
+
         logger.info('Config: %s', self.config)
 
         self.qxsize = int(self.naxis1 / 2)  # quadrant x size
         self.qysize = int(self.naxis2 / 2)  # quadrant y size
 
-        self.mdata = ma.array(self.data, copy=True) # masked science data
+        self.mdata = ma.array(self.data, copy=True)  # masked science data
 
         if self.instrument == 'GNIRS': # mask the padding
             self.mdata[-2:,] = ma.masked
@@ -175,18 +185,18 @@ class CleanIR():
                 if len(r) != 2:
                     logger.error('ROI must have 2 values: y1:y2:  %s', roi)
                     raise SystemExit
-                y1 = int(r[0]) - 1 # convert to zero-index
-                y2 = int(r[1])     # zero index +1 because slicing does not include upper limit
+                y1 = int(r[0]) - 1  # convert to zero-index
+                y2 = int(r[1])      # zero index +1 because slicing does not include upper limit
                 logger.debug('...%d-%d', y1,y2)
 
                 # Unmask the ROI: mask[y1:y2,x1:x2] = False
-                self.roimask.mask[y1:y2,] = False
+                self.roimask.mask[y1:y2, ] = False
 
                 if self.roimirror:
                     y3 = 1024-y2
                     y4 = 1024-y1
                     logger.debug('...%d-%d', y3,y4)
-                    self.roimask.mask[y3:y4,] = False
+                    self.roimask.mask[y3:y4, ] = False
  
             # Apply the ROI mask to the science data:
             self.mdata *= self.roimask
@@ -675,7 +685,6 @@ def cpq(quad, pxsize=None, pysize=None, qxsize=None, qysize=None, indx=None, ind
     logger.debug('Pattern Amplitude: %.2f', numpy.amax(p) - numpy.amin(p))
     logger.debug('Pattern Sigma:     %.2f', numpy.std(p))
 
-
     if pshift == 'mean':
         logger.debug('Shifting the pattern to have a mean of zero')
         p -= numpy.mean(p)
@@ -873,18 +882,22 @@ if __name__ == '__main__':
         quadrant it is replicated to cover the entire quadrant and subtracted, and the mean of the\
         pattern is added back to preserve flux. The standard deviation of all the pixels in the\
         quadrant is compared to that before the pattern subtraction, and if no reduction was\
-        achieved the subtraction is undone.  The pattern subtraction may be forced via the -f flag.\
+        achieved the subtraction is undone (the pattern subtraction may be forced with --force).\
         This process is repeated for all four quadrants and the cleaned frame is written to\
-        c<infile> (or the file specified with the -o flag).  The pattern derived for each quadrant\
-        may be saved with the -p flag.\
+        c<infile>.  The pattern derived for each quadrant may be saved with --save pattern.\
+        \n\
+        If the pattern only affect part of an image, which may appear as one or more  bands of\
+        noise across the image, these regions may be specified with --roi.\
         \n\
         Pattern noise is often accompanied by an offset in the bias values between the four\
-        quadrants.  One may want to use the -q flag to try to remove this offset.  This attempts to\
+        quadrants.  One may want to use --quadlevel to try to remove this offset.  This attempts to\
         match the iteratively determined median value of each quadrant. This method works best with\
-        sky subtraction (i.e. with the -s flag), and does not work well if there are large extended\
-        objects in the frame.  By default the median is determined from the entire frame, although\
-        the -c flag will only use a central portion of the image.  Note that the derived quadrant\
-        offsets will be applied to the output pattern file.\
+        sky subtraction (i.e. with --sub), and does not work well if there are large extended\
+        objects in the frame.  Note that the derived quadrant offsets will be applied to the output\
+        pattern file.\
+        \n\
+        Row noise (description here) will not be removed by the regular algorithm that works on the entirety of each\
+        quadrant at a time.\
         \n\
         Removing the pattern from spectroscopy is more difficult because of many vertical sky\
         lines.  By default NIRI f/6 spectroscopy with the 2-pixel or blue slits (which do not fill\
@@ -948,14 +961,15 @@ if __name__ == '__main__':
     parser.add_argument('--TL', action='store', type=float, default=0.0, metavar='OFFSET',
                         help='Top Left quadrant manual offset (ADU)')
     parser.add_argument('--TR', action='store', type=float, default=0.0, metavar='OFFSET',
-                        help='Top Right quadrant manual offset')
+                        help='Top Right quadrant manual offset (ADU)')
     parser.add_argument('--BL', action='store', type=float, default=0.0, metavar='OFFSET',
-                        help='Bottom Left quadrant manual offset')
+                        help='Bottom Left quadrant manual offset (ADU)')
     parser.add_argument('--BR', action='store', type=float, default=0.0, metavar='OFFSET',
-                        help='Bottom Right quadrant manual offset')
+                        help='Bottom Right quadrant manual offset (ADU)')
 
     parser.add_argument('--roi', default=None, type=str, action='append', metavar='Y1:Y2',
-                        help='ROI(s) to clean')
+                        help='ROI(s) to clean.  ROI should be specified in the lower half of the\
+                        detector (y<=512) and it will be mirrored to the top half.')
 
     parser.add_argument('--rowfilter', action='store_true', default=False,
                         help='Filter each quadrant row with an 8-pixel kernel.  This may be useful\
@@ -963,7 +977,7 @@ if __name__ == '__main__':
 
     parser.add_argument('--save', action='append', type=str, default=None,
                         choices=['kernel', 'masked', 'pattern', 'rowpattern'],
-                        help='Save intermediate product(s)')
+                        help='Save intermediate data product(s)')
 
     parser.add_argument('--sigma', action='store', type=float, default=3.0,
                         help='Source clipping upper limit [3.0]')
@@ -972,11 +986,10 @@ if __name__ == '__main__':
                         help='ROI(s) to ignore when calculating the pattern.  Note that default\
                         ROIs will be used for some spectroscopic configurations.  Set to "None"\
                         to NOT use the default ROIs.')
-    
     # --src defaults to None, which this script interprets as "use the default mask".
     # If the user wants to NOT use the default mask they should pass in the string "None"
     # which will come through as args.src = ['None'].
-    
+
     parser.add_argument('--sub', action='store', type=str, default=None, metavar='FITS',
                         help='FITS file to subtract before calculating pattern')
 
