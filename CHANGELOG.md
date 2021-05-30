@@ -71,4 +71,4 @@
 2020-Jul-22, astephens, fix bug when using --rowfiter and --sub together  
 2020-Jul-22, astephens, add option to supply a custom pixel mask  
 2021-May-24, astephens, improve extension detection; give error if image has incorrect dimensions  
-
+2021-May-29, astephens, pad the GNIRS DQ extension; add uncut.py helper script  
