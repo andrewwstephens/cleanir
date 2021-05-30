@@ -139,8 +139,8 @@ class CleanIR():
         elif self.instrument == 'GNIRS':
             self.config = self.hdulist[0].header['CAMERA'] + self.hdulist[0].header['DECKER']
 
-            logger.debug('Padding GNIRS y-axis by 2 rows') # ydim must be a multiple of 4
-            self.data = numpy.append(self.data, numpy.zeros((2,self.naxis1)), axis=0)
+            logger.debug('Padding GNIRS SCI y-axis by 2 rows')  # ydim must be a multiple of 4
+            self.data = numpy.append(self.data, numpy.zeros((2, self.naxis1)), axis=0)
             self.naxis2 += 2
             logger.debug('New image size: %s x %s', self.naxis1, self.naxis2)
 
@@ -223,6 +223,11 @@ class CleanIR():
             numpix = len(dq[dq>0])
             if numpix > 0:
                 logger.info('Masking %d pixels flagged in DQ extension', numpix)
+
+                if self.instrument == 'GNIRS':
+                    logger.debug('Padding GNIRS DQ y-axis by 2 rows')
+                    dq = numpy.append(dq, numpy.ones((2, self.naxis1)), axis=0)
+
                 self.dqmask = ma.masked_where(dq > 0, numpy.ones((self.naxis2, self.naxis1)))
                 self.mdata *= self.dqmask
             else:
