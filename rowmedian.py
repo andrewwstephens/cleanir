@@ -133,7 +133,7 @@ if __name__ == '__main__':
                         help='ROI(s) to use to calculate the row median.')
 
     parser.add_argument('--sub', type=str, action='store', default='full',
-                        choices=['same', 'full'],
+                        choices=['full', 'same'],
                         help='Region to subtract: "full" detector or "same" as input ROI [full]')
 
     parser.add_argument('--save', action='append', type=str, default=None,
