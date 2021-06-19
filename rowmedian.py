@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-
 import argparse
 from   astropy.io import fits
 import datetime
@@ -8,8 +7,7 @@ import numpy
 from   numpy import ma
 import os
 import sys
-
-__version__ = '2021-Jun-13'
+__version__ = '2021-Jun-18'
 
 # --------------------------------------------------------------------------------------------------
 
@@ -22,11 +20,11 @@ def main(args):
         logger.error('No files found')
     else:
         for f in args.fits:
-            row_subtract(f, args.roi, args.save)
+            row_subtract(f, args.roi, args.sub, args.save)
 
 # --------------------------------------------------------------------------------------------------
 
-def row_subtract(fitsfile, rois, save):
+def row_subtract(fitsfile, rois, sub, save):
     """
     Subtract the median of each row based on the pixels in the supplied ROIs.
     """
@@ -62,8 +60,9 @@ def row_subtract(fitsfile, rois, save):
     logger.debug('median: %s', median)
     logger.debug('len(median): %d', len(median))
     median_image = numpy.tile(median, nx).reshape(nx, ny).transpose()
+    if sub == 'same':
+        median_image.mask = roimask.mask
     logger.debug('median_image: %s', median_image)
-    logger.debug('median_image.shape: %s', median_image.shape)
 
     path, filename = os.path.split(fitsfile)
     if save is not None:
@@ -127,14 +126,23 @@ if __name__ == '__main__':
         'examples:\n' +
         '  rowmedian N20210613S0123.fits --roi 300:400 --roi 600:700 --save median',
         epilog='Version: ' + __version__)
+
     parser.add_argument('fits', default=None, nargs='+', help='input FITS file(s)')
+
     parser.add_argument('--roi', default=None, type=str, action='append', metavar='X1:X2',
                         help='ROI(s) to use to calculate the row median.')
+
+    parser.add_argument('--sub', type=str, action='store', default='full',
+                        choices=['same', 'full'],
+                        help='Region to subtract: "full" detector or "same" as input ROI [full]')
+
     parser.add_argument('--save', action='append', type=str, default=None,
                         choices=['masked', 'median'],
                         help='Save intermediate data product(s)')
+
     parser.add_argument('--loglevel', type=str, default='info',
                         choices=['debug', 'info', 'warning', 'error'], help='Log level [INFO]')
+
     args = parser.parse_args(args=None if sys.argv[1:] else ['--help'])
     main(args)
 
