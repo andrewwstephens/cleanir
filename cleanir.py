@@ -15,7 +15,7 @@ import os
 from   scipy import optimize
 from   scipy.stats import norm
 
-__version__ = '2021-May-24'
+__version__ = '2021-Jun-18'
 
 # --------------------------------------------------------------------------------------------------
 
@@ -23,7 +23,7 @@ __version__ = '2021-May-24'
 # Update help
 # Simpler to pass the four quadrants as a list, e.g. [q0,q1,q2,q3] ?
 # Do we really need to save the variables qxsize and qysize ?
-# Add regression tests
+# Add more regression tests
 # Whenever there is intermittent noise, it seems to always be in coherent bands across the detector.
 # This indicates that the pattern is actually across the *entire* detector, but with some offset or
 # scaling between the quadrants.  If we could use all 4 quadrants (at the same time) for  pattern
@@ -31,7 +31,6 @@ __version__ = '2021-May-24'
 # unilluminated edges are available.
 # -> either median combine the quadrants or the pattern, or filter the whole detector at once.
 # support FITS files that have been compressed with bzip2
-# Run regression tests - especially the old frame with row noise.
 
 # --------------------------------------------------------------------------------------------------
 
@@ -74,6 +73,7 @@ class CleanIR():
         self.roi = args.roi
         self.roimirror = True  # mirror ROIs in the bottom quads to the top quads (and vice-versa?)
         self.rowfilter = args.rowfilter
+        self.rowmedian = args.rowmedian
         self.clip_sigma = args.sigma
         self.save = args.save
         self.src = args.src
@@ -92,7 +92,10 @@ class CleanIR():
         self.mask_sources()
         self.calculate_pattern()
         self.subtract_pattern()
-        self.row_filter()
+        if self.rowfilter:
+            self.row_filter()
+        if self.rowmedian:
+            self.row_median_filter()
         self.level_quadrants()
         self.write_output()
         return
@@ -486,10 +489,6 @@ class CleanIR():
         Generate an independent 8x1 pixel pattern for each row in each quadrant.
         """        
         logger = logging.getLogger('row_filter')
-
-        if not self.rowfilter:
-            return
-
         logger.info('Row filtering...')
 
         # quadrant AND/OR row filtering?
@@ -504,9 +503,25 @@ class CleanIR():
         pool.join()
         self.rowpattern = assemble(p0,p1,p2,p3)
         self.cleaned -= self.rowpattern
-
         return
-    
+
+    # ----------------------------------------------------------------------------------------------
+
+    def row_median_filter(self):
+        """
+        Subtract the median of each row in each quadrant.
+        """
+        logger = logging.getLogger('row_median')
+        logger.info('Median filtering each row...')
+        q0,q1,q2,q3 = disassemble(self.mdata - self.pattern)
+        pool = multiprocessing.Pool(processes=4)
+        p0,p1,p2,p3 = pool.map(rowmed, [q0,q1,q2,q3])
+        pool.close()
+        pool.join()
+        self.rowmedianimage = assemble(p0,p1,p2,p3)
+        self.cleaned -= self.rowmedianimage
+        return
+
     # ----------------------------------------------------------------------------------------------
 
     def write_output(self):
@@ -529,6 +544,8 @@ class CleanIR():
                     data = self.pattern
                 elif s == 'rowpattern':
                     data = self.rowpattern
+                elif s == 'rowmedian':
+                    data = self.rowmedianimage
                 fits.PrimaryHDU(data).writeto(f)
 
         if self.instrument == 'GNIRS':
@@ -577,7 +594,6 @@ def assemble(q0, q1, q2, q3):
     Assemble quadrants into an image.
     """
     logger = logging.getLogger('assemble')
-    logger.debug('Assembling image...')
 
     xsize = 2 * q0.shape[1]
     ysize = 2 * q0.shape[0]
@@ -725,6 +741,15 @@ def rf(quad): # Row filter a quadrant
     logger.debug('Row pattern mean: %s', mean)
     pattern -= mean                      # set the pattern mean to zero
     return pattern.filled(fill_value=0)  # set masked values to zero
+
+# --------------------------------------------------------------------------------------------------
+
+def rowmed(quad):
+    median = ma.median(quad, axis=1)  # calculate median along the x-axis
+    ysize, xsize = quad.shape
+    medimg = numpy.tile(median, xsize).reshape(xsize, ysize).transpose()
+    medimg -= numpy.mean(medimg)        # set the mean to zero
+    return medimg.filled(fill_value=0)  # set masked values to zero
 
 # --------------------------------------------------------------------------------------------------
 
@@ -980,8 +1005,11 @@ if __name__ == '__main__':
                         help='Filter each quadrant row with an 8-pixel kernel.  This may be useful\
                         for GNIRS XD spectra that cannot be cleaned otherwise.')
 
+    parser.add_argument('--rowmedian', action='store_true', default=False,
+                        help='Subtract the median of each quadrant row.')
+
     parser.add_argument('--save', action='append', type=str, default=None,
-                        choices=['kernel', 'masked', 'pattern', 'rowpattern'],
+                        choices=['kernel', 'masked', 'pattern', 'rowpattern', 'rowmedian'],
                         help='Save intermediate data product(s)')
 
     parser.add_argument('--sigma', action='store', type=float, default=3.0,
@@ -991,7 +1019,7 @@ if __name__ == '__main__':
                         help='ROI(s) to ignore when calculating the pattern.  Note that default\
                         ROIs will be used for some spectroscopic configurations.  Set to "None"\
                         to NOT use the default ROIs.')
-    # --src defaults to None, which this script interprets as "use the default mask".
+    # NOTE: --src defaults to None, which this script interprets as "use the default mask".
     # If the user wants to NOT use the default mask they should pass in the string "None"
     # which will come through as args.src = ['None'].
 
