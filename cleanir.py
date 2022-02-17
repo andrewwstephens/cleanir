@@ -1,5 +1,31 @@
 #!/usr/bin/env python3
 
+
+"""
+
+TBD
+----
+- ToDo:
+- Update help
+- Simpler to pass the four quadrants as a list, e.g. [q0,q1,q2,q3] ?
+- Do we really need to save the variables qxsize and qysize ?
+- Add more regression tests
+- Whenever there is intermittent noise, it seems to always be in coherent bands across the detector.
+- This indicates that the pattern is actually across the *entire* detector, but with some offset or
+- scaling between the quadrants.  If we could use all 4 quadrants (at the same time) for  pattern
+- determination that may give better results, especially for GNIRS spectroscopy where only the
+- unilluminated edges are available.
+- -> either median combine the quadrants or the pattern, or filter the whole detector at once.
+- support FITS files that have been compressed with bzip2
+
+
+Changelog
+-----------
+- 20220105: update to add arg option for output path
+- 20220113: rearranged parser, and added 'cleanFits' as a hook for python calls
+
+"""
+
 import argparse
 from   astropy.io import fits
 from   astropy import stats
@@ -15,24 +41,15 @@ import os
 from   scipy import optimize
 from   scipy.stats import norm
 
-__version__ = '2021-Jun-18'
+__version__ = '2022-Jan-12'
+__author__ = 'astephens,cfigura'
+
+
 
 # --------------------------------------------------------------------------------------------------
 
-# ToDo:
-# Update help
-# Simpler to pass the four quadrants as a list, e.g. [q0,q1,q2,q3] ?
-# Do we really need to save the variables qxsize and qysize ?
-# Add more regression tests
-# Whenever there is intermittent noise, it seems to always be in coherent bands across the detector.
-# This indicates that the pattern is actually across the *entire* detector, but with some offset or
-# scaling between the quadrants.  If we could use all 4 quadrants (at the same time) for  pattern
-# determination that may give better results, especially for GNIRS spectroscopy where only the
-# unilluminated edges are available.
-# -> either median combine the quadrants or the pattern, or filter the whole detector at once.
-# support FITS files that have been compressed with bzip2
 
-# --------------------------------------------------------------------------------------------------
+# --------------------------------------------------------------------------------------q------------
 
 def main(args):
     
@@ -80,6 +97,7 @@ class CleanIR():
         self.sub = args.sub
         self.use_dq = not args.nodq
         self.usermask = args.mask  # user-supplied pixel mask
+        self.outputpath = args.outputpath
 
     # ----------------------------------------------------------------------------------------------
 
@@ -525,6 +543,9 @@ class CleanIR():
     # ----------------------------------------------------------------------------------------------
 
     def write_output(self):
+        if not os.path.exists(self.outputpath):
+            os.makedirs(self.outputpath)
+            
         logger = logging.getLogger('write_output')
 
         path, filename = os.path.split(self.fitsfile)
@@ -553,6 +574,7 @@ class CleanIR():
             self.cleaned = numpy.delete(self.cleaned, [self.naxis2-1,self.naxis2-2], axis=0)
 
         cleanfile += '.fits'
+        cleanfile = os.path.join(self.outputpath,cleanfile)
         logger.info('Writing %s', cleanfile)
         delete ([cleanfile])
         self.hdulist[self.sciext].data = self.cleaned
@@ -876,7 +898,9 @@ def delete(filelist):
 
 def ConfigureLogging(level='INFO'):
     """Set up a console logger"""
-    logger = logging.getLogger()
+
+    
+    logger = logging.getLogger() 
     logger.setLevel(logging.DEBUG) # set minimum threshold level for logger
     formatter = logging.Formatter('%(asctime)s %(levelname)-8s %(message)s',
                                   datefmt='%Y-%m-%d %H:%M:%S')
@@ -897,13 +921,32 @@ def ConfigureLogging(level='INFO'):
         print ('ERROR: Unknown log error level')
         consoleloghandler.setLevel(logging.INFO)
     consoleloghandler.setFormatter(formatter)
+    ## check for other handlers, otherwise we'll get multiple log entries
+    if (logger.hasHandlers()):
+        logger.handlers.clear()
     logger.addHandler(consoleloghandler)
     return logger
 
 # --------------------------------------------------------------------------------------------------
 
-if __name__ == '__main__':
+def cleanFits(fits,**kwargs):
 
+    ## cleanFits serves as the python hook for the cleanir command.
+    ## run the parser on the fits name, and then loop through kwargs.
+    ## NB: this does not check to ensure that kwargs are correct!
+    
+    parser = create_parser()
+    args = parser.parse_args([fits])
+    for key,value in kwargs.items():
+        exec(f'args.{key}=value')
+
+    main(args)
+
+
+# --------------------------------------------------------------------------------------------------
+
+def create_parser():
+    
     parser = argparse.ArgumentParser(
         description='This script assumes that the NIRI/GNIRS pattern noise can be represented by a\
         16x4 pixel additive pattern which is repeated over the entire quadrant. The pattern is\
@@ -976,7 +1019,9 @@ if __name__ == '__main__':
                         help='Ignore the DQ plane [False]')
 
     #parser.add_argument('-o', '--output', action='store', type=str, default=None,
-    #                    help='Specify the cleaned output file [c<inputfile>]')
+    #                     help='Specify the cleaned output file [c<inputfile>]')
+    parser.add_argument('--outputpath', action='store', type=str, default="./",
+                         help='Specify the path for the cleaned output file')
 
     parser.add_argument('--pshift', action='store', type=str, default='mean',
                         choices=['min', 'mean', 'max'],
@@ -1026,7 +1071,14 @@ if __name__ == '__main__':
     parser.add_argument('--sub', action='store', type=str, default=None, metavar='FITS',
                         help='FITS file to subtract before calculating pattern')
 
+    return parser
+# --------------------------------------------------------------------------------------------------
+
+if __name__ == '__main__':
+
+    parser = create_parser()
     args = parser.parse_args()
+    
     main(args)
 
 # --------------------------------------------------------------------------------------------------
