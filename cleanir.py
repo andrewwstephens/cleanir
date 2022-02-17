@@ -931,7 +931,7 @@ def ConfigureLogging(level='INFO'):
 
 def cleanFits(fits,**kwargs):
 
-    ## cleanFits serves as the python hook for the cleanIR3 command.
+    ## cleanFits serves as the python hook for the cleanir command.
     ## run the parser on the fits name, and then loop through kwargs.
     ## NB: this does not check to ensure that kwargs are correct!
     
